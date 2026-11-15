@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#090912" />
+  <link rel="icon" href="data:," />
+  <title>Ritmo de Rua — A batalha é no beat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js"}}
+  </script>
+</head>
+<body>
+  <main class="app-shell">
+    <canvas id="world" aria-label="Arena 3D"></canvas>
+    <div class="scene-vignette"></div>
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Ritmo de Rua início"><span class="brand-mark">R</span><span>RITMO<span class="brand-light"> DE RUA</span></span></a>
+      <div class="top-status"><span class="live-dot"></span><span id="venue-label">CIDADE DE SÃO LUME</span></div>
+      <div class="wallet"><span class="coin">¢</span><span id="cash">120</span><span class="wallet-label">CRÉDITOS</span></div>
+    </header>
+
+    <section class="screen welcome-screen" id="welcome-screen">
+      <div class="welcome-copy">
+        <p class="eyebrow"><span class="eyebrow-line"></span> UMA CIDADE. UM SONHO. MIL BATIDAS.</p>
+        <h1>A batalha<br>é no <em>beat.</em></h1>
+        <p class="intro">Na cidade, respeito se conquista com ritmo. Encare as crews, evolua seu som e conquiste seu lugar no maior palco de São Lume.</p>
+        <div class="career-note"><span class="note-icon">✳</span><span><b>Sua jornada começa agora</b><small>Escolha seu instrumento. Encontre sua voz.</small></span></div>
+      </div>
+      <div class="style-picker">
+        <div class="picker-heading"><div><p class="eyebrow">SEU ESTILO, SUA ARMA</p><h2>Como você joga?</h2></div><span class="step-count">01 <i>/ 02</i></span></div>
+        <div class="style-grid">
+          <button class="style-card selected" data-style="guitar">
+            <span class="instrument-icon guitar-icon">〽</span><span class="style-name">Guitarra</span><span class="style-tag">POTÊNCIA</span><span class="style-desc">Poucos acordes. Impacto máximo.</span><span class="style-stat"><i style="--stat:88%"></i></span>
+          </button>
+          <button class="style-card" data-style="flute">
+            <span class="instrument-icon flute-icon">〰</span><span class="style-name">Flauta</span><span class="style-tag">MAGIA</span><span class="style-desc">Melodias que viram o jogo.</span><span class="style-stat"><i style="--stat:64%"></i></span>
+          </button>
+          <button class="style-card" data-style="keys">
+            <span class="instrument-icon keys-icon">▥</span><span class="style-name">Teclas</span><span class="style-tag">CADÊNCIA</span><span class="style-desc">Uma chuva de notas sem parar.</span><span class="style-stat"><i style="--stat:76%"></i></span>
+          </button>
+        </div>
+        <button id="start-career" class="primary-button">COMEÇAR JORNADA <span>↗</span></button>
+        <p class="picker-foot">TECLADO <kbd>ESPAÇO</kbd> NO RITMO PARA ATACAR</p>
+      </div>
+      <div class="welcome-footer"><span>© 2025 RITMO DE RUA</span><span>FEITO DE RITMO, NÃO DE VIOLÊNCIA.</span></div>
+    </section>
+
+    <section class="game-screen hidden" id="game-screen">
+      <div class="battle-head">
+        <div class="battle-title"><p class="eyebrow" id="battle-kicker">BAIRRO DO CAIS · DESAFIO 01</p><h2 id="battle-name">Ritmo de chegada</h2></div>
+        <div class="round-pill"><span class="live-dot"></span><span id="battle-round">RODADA 01</span></div>
+        <button id="sound-toggle" class="icon-button" title="Ativar ou silenciar áudio">♫ <span>SOM ON</span></button>
+      </div>
+      <div class="combat-ui">
+        <div class="fighter-card player-card">
+          <div class="fighter-meta"><span class="fighter-label">VOCÊ</span><span class="fighter-level" id="player-level">LV. 01</span></div>
+          <div class="fighter-name" id="player-style-name">GUITARRA</div>
+          <div class="health-track"><i id="player-health"></i></div><div class="health-caption"><span>VIBE</span><b id="player-hp-text">100 / 100</b></div>
+          <div class="fighter-badge" id="player-badge">✦</div>
+        </div>
+        <div class="versus">VS</div>
+        <div class="fighter-card rival-card">
+          <div class="fighter-meta"><span class="fighter-label">RIVAL</span><span class="fighter-level" id="rival-label">CREW DO CAIS</span></div>
+          <div class="fighter-name" id="rival-name">DJ MARÉ</div>
+          <div class="health-track rival-track"><i id="rival-health"></i></div><div class="health-caption"><span>VIBE</span><b id="rival-hp-text">100 / 100</b></div>
+          <div class="fighter-badge rival-badge">♫</div>
+        </div>
+      </div>
+      <div class="rhythm-panel">
+        <div class="rhythm-label"><span class="beat-indicator" id="beat-indicator"></span><span>MARQUE O TEMPO</span><b id="beat-count">01</b></div>
+        <div class="beat-track" id="beat-track"><div class="beat-fill" id="beat-fill"></div><div class="beat-target"></div><div class="beat-pulse" id="beat-pulse"></div></div>
+        <div class="beat-hint"><span>AGORA</span><span>NO BEAT <b>+ DANO</b></span><span>PRÓXIMO</span></div>
+      </div>
+      <div class="battle-bottom">
+        <div class="combo-box"><span class="combo-label">SEQUÊNCIA</span><b id="combo-count">0<span>x</span></b><small id="combo-caption">ACERTE NO TEMPO</small></div>
+        <button class="attack-button" id="attack-button"><span class="attack-key">ESPAÇO</span><span class="attack-text">TOCAR</span><span class="attack-arrow">↗</span></button>
+        <div class="score-box"><span class="combo-label">PONTUAÇÃO</span><b id="score-count">0000</b><small id="feedback-text">SINTA A BATIDA</small></div>
+      </div>
+      <div class="game-footer"><span id="venue-progress">01 / 04 · BAIRRO DO CAIS</span><button id="open-garage" class="text-button">♫ GARAGEM <span id="upgrade-label">MELHORAR INSTRUMENTO</span></button><button id="exit-career" class="text-button exit-button">SAIR DA JORNADA</button></div>
+    </section>
+
+    <section class="overlay-modal hidden" id="result-modal">
+      <div class="modal-card result-card"><div class="result-stamp" id="result-stamp">✦</div><p class="eyebrow" id="result-kicker">BATALHA CONCLUÍDA</p><h2 id="result-title">O cais é seu.</h2><p id="result-copy">Seu som ecoou pelo bairro.</p><div class="reward-line"><span>RECOMPENSA</span><b>+<span id="reward-amount">80</span> ¢</b></div><div class="result-actions"><button id="result-next" class="primary-button">PRÓXIMO DESAFIO <span>↗</span></button><button id="result-garage" class="secondary-button">VISITAR GARAGEM</button></div></div>
+    </section>
+
+    <section class="overlay-modal hidden" id="garage-modal">
+      <div class="modal-card garage-card"><button id="close-garage" class="modal-close" aria-label="Fechar">×</button><p class="eyebrow">OFICINA DO ZÉ · SÃO LUME</p><h2>Deixe seu som<br><em>mais afiado.</em></h2><p class="garage-copy">Cada upgrade melhora sua presença nas batalhas. Invista seus créditos com sabedoria.</p><div class="upgrade-row"><span class="upgrade-icon">✦</span><span class="upgrade-info"><b>Amplificador de rua</b><small>+12 de potência por ataque</small></span><b class="upgrade-price">¢ <span id="upgrade-cost">80</span></b></div><button id="buy-upgrade" class="primary-button">COMPRAR UPGRADE <span>↗</span></button><p class="garage-level" id="garage-level">AMPLIFICADOR NÍVEL 0 · POTÊNCIA BASE</p></div>
+    </section>
+    <div id="toast" class="toast" aria-live="polite"></div>
+    <div class="corner-coordinate">LAT 23°32' · LONG 46°38'<br><span>NOITE 01 — SÃO LUME</span></div>
+  </main>
+  <script type="module" src="game.js"></script>
+</body>
+</html>
