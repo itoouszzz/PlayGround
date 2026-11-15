@@ -16,9 +16,14 @@ const instruments = {
 let save = loadSave();
 let selectedStyle = save.style || 'guitar';
 let scene, camera, renderer, clock, playerModel, rivalModel, particles = [], audioCtx = null;
-let active = false, soundOn = true, startedAt = 0, lastBeat = -1, lastInput = 0, enemyBeat = 0;
+let active = false, exploring = false, soundOn = true, startedAt = 0, lastBeat = -1, lastInput = 0, enemyBeat = 0, lastBattleWon = false;
 let playerHP = 100, rivalHP = 100, combo = 0, score = 0, runDamage = 0, currentVenue = 0;
-let toastTimer;
+let toastTimer, nearestStation = -1;
+const moveKeys = new Set();
+const playerWorldPosition = new THREE.Vector3(-1, 0, 9);
+const battleReturnPosition = new THREE.Vector3(-1, 0, 9);
+const venueStations = [];
+const districtNames = ['RUA DAS LANTERNAS', 'PÁTIO 13 · DISTRITO ESCOLAR', 'GALPÃO 9 · ZONA INDUSTRIAL', 'GRANDE AUDITÓRIO · CENTRO'];
 
 function loadSave() {
   try { return { style: 'guitar', cash: 120, level: 1, upgrade: 0, unlocked: 0, ...JSON.parse(localStorage.getItem(storageKey) || '{}') }; }
@@ -29,10 +34,10 @@ function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
 function initScene() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x10101a);
-  scene.fog = new THREE.Fog(0x10101a, 18, 54);
-  camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, .1, 100);
-  camera.position.set(0, 7.1, 19.5);
+  scene.background = new THREE.Color(0x0b0d13);
+  scene.fog = new THREE.Fog(0x0b0d13, 18, 72);
+  camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, .1, 120);
+  camera.position.set(0, 7.2, 19.5);
   camera.lookAt(0, 2.4, -1.5);
   renderer = new THREE.WebGLRenderer({ canvas: $('world'), antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
@@ -41,16 +46,19 @@ function initScene() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.18;
   clock = new THREE.Clock();
-  scene.add(new THREE.HemisphereLight(0x9ca9d0, 0x17121c, 2.0));
-  const keyLight = new THREE.DirectionalLight(0xffd5c0, 3.2);
-  keyLight.position.set(-5, 10, 7); keyLight.castShadow = true; keyLight.shadow.mapSize.set(1024, 1024); scene.add(keyLight);
-  const pinkLight = new THREE.PointLight(0xff3687, 45, 22); pinkLight.position.set(4, 5, -1); scene.add(pinkLight);
-  const cyanLight = new THREE.PointLight(0x35dcd3, 35, 18); cyanLight.position.set(-5, 4, 2); scene.add(cyanLight);
+  scene.add(new THREE.HemisphereLight(0x9ca9d0, 0x17121c, 2.1));
+  const keyLight = new THREE.DirectionalLight(0xffd5c0, 3.5);
+  keyLight.position.set(-7, 10, 9); keyLight.castShadow = true; keyLight.shadow.mapSize.set(1024, 1024); scene.add(keyLight);
+  const pinkLight = new THREE.PointLight(0xff4b7d, 34, 26); pinkLight.position.set(4.5, 5, -2); scene.add(pinkLight);
+  const cyanLight = new THREE.PointLight(0x36e0d2, 32, 18); cyanLight.position.set(-5, 4.5, 4); scene.add(cyanLight);
+  const warmLight = new THREE.PointLight(0xf8c978, 18, 28); warmLight.position.set(0, 7, 10); scene.add(warmLight);
   buildCity();
-  playerModel = buildFighter(-2.2, 0x263e52, 0x62e8dd, false);
+  buildVenueStations();
+  playerModel = buildFighter(-2.2, 0x263e52, instruments[selectedStyle].color, false);
   rivalModel = buildFighter(2.2, 0x4b2339, 0xff4e91, true);
+  rivalModel.visible = false;
   scene.add(playerModel, rivalModel);
   window.addEventListener('resize', resizeScene);
   animate();
@@ -65,48 +73,78 @@ function cylinder(parent, rt, rb, h, pos, mat, radial = 10) {
   m.position.set(...pos); m.castShadow = true; parent.add(m); return m;
 }
 function buildCity() {
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), material(0x20202a, .94));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), material(0x11161e, .96));
   ground.rotation.x = -Math.PI / 2; ground.position.y = -.08; ground.receiveShadow = true; scene.add(ground);
-  // Wet pavement strips catch the neon reflections.
-  for (let i = -5; i <= 5; i++) {
-    const line = new THREE.Mesh(new THREE.BoxGeometry(.035, .012, 28), new THREE.MeshBasicMaterial({ color: i % 2 ? 0x362b3b : 0x243239, transparent: true, opacity: .8 }));
-    line.position.set(i * 1.3, -.01, -1); scene.add(line);
+
+  const plaza = new THREE.Mesh(new THREE.BoxGeometry(26, .08, 11), material(0x1a1f2b));
+  plaza.position.set(0, 0.02, 0.8); plaza.receiveShadow = true; scene.add(plaza);
+
+  for (let i = -8; i <= 8; i++) {
+    const line = new THREE.Mesh(new THREE.BoxGeometry(.05, .015, 28), new THREE.MeshBasicMaterial({ color: i % 2 ? 0x433b4c : 0x2b3740, transparent: true, opacity: .8 }));
+    line.position.set(i * 1.55, .03, -1.3); scene.add(line);
   }
-  const facadeColors = [0x242431, 0x302a37, 0x202c34, 0x35272f, 0x242938];
+
+  const facadeColors = [0x1a1d28, 0x2a1f2d, 0x1d2a31, 0x31272f, 0x222938, 0x242a39];
   for (let side of [-1, 1]) {
-    for (let i = 0; i < 5; i++) {
-      const x = side * (7.2 + i * 2.1), z = -4 - (i % 3) * 2;
-      const w = 3.4 + (i % 2) * 1.4, h = 7 + (i % 3) * 2.5;
-      const building = box(scene, [w, h, 5], [x, h / 2 - .1, z], material(facadeColors[(i + (side > 0 ? 2 : 0)) % facadeColors.length]), false);
+    for (let i = 0; i < 6; i++) {
+      const x = side * (7.8 + i * 2.25), z = -5.5 - (i % 3) * 2.8;
+      const w = 3.8 + (i % 2) * 1.3, h = 7.2 + (i % 3) * 2.4;
+      const building = box(scene, [w, h, 5.2], [x, h / 2 - .1, z], material(facadeColors[(i + (side > 0 ? 2 : 0)) % facadeColors.length]), false);
       building.receiveShadow = true;
       for (let row = 0; row < 3; row++) for (let col = 0; col < 2; col++) {
         const lit = (row * 3 + col * 2 + i) % 4 === 1;
-        const win = box(scene, [.5, .76, .04], [x - w * .26 + col * w * .48, 1.4 + row * 1.5, z + 2.53], new THREE.MeshBasicMaterial({ color: lit ? (i % 2 ? 0xffc875 : 0x67d9db) : 0x343546, transparent: true, opacity: lit ? .88 : .7 }), false);
+        box(scene, [.52, .78, .04], [x - w * .26 + col * w * .48, 1.4 + row * 1.5, z + 2.56], new THREE.MeshBasicMaterial({ color: lit ? (i % 2 ? 0xffd88b : 0x68e6de) : 0x35394c, transparent: true, opacity: lit ? .92 : .7 }), false);
       }
-      if (i < 3) {
+      if (i < 4) {
         const signColor = i % 2 ? 0x62e8dd : 0xff4e91;
-        box(scene, [1.35, .58, .12], [x + side * .15, 3.9, z + 2.65], new THREE.MeshBasicMaterial({ color: signColor }), false);
+        box(scene, [1.4, .62, .12], [x + side * .16, 3.8, z + 2.68], new THREE.MeshBasicMaterial({ color: signColor }), false);
       }
     }
   }
-  // Alley cross-beams and a glowing hand-painted mural.
-  for (let i = -1; i <= 1; i++) {
-    const pillar = box(scene, [.25, 4.1, .3], [i * 6.7, 2, -8], material(0x4b3b4a), false);
-    box(scene, [6.9, .18, .3], [i * 6.7, 4.12, -8], material(0x54454c), false);
+
+  for (let i = -2; i <= 2; i++) {
+    const pillar = box(scene, [.26, 4.1, .28], [i * 6.4, 2.1, -8.5], material(0x453b4b), false);
+    box(scene, [7, .18, .28], [i * 6.4, 4.12, -8.5], material(0x54454c), false);
   }
-  const mural = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.5), new THREE.MeshBasicMaterial({ color: 0x171824, side: THREE.DoubleSide }));
-  mural.position.set(0, 4.3, -9.1); scene.add(mural);
-  const muralText = makeNeon('SÃO LUME', 0x62e8dd); muralText.position.set(0, 4.45, -9.02); scene.add(muralText);
-  for (const x of [-6.5, 6.5]) {
-    cylinder(scene, .045, .07, 4.2, [x, 2.1, -1.8], material(0x4d4a53), 8);
-    const lamp = new THREE.PointLight(x < 0 ? 0x62e8dd : 0xff4e91, 22, 12); lamp.position.set(x, 4.1, -1.8); scene.add(lamp);
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(.12, 12, 8), new THREE.MeshBasicMaterial({ color: x < 0 ? 0x62e8dd : 0xff4e91 })); orb.position.copy(lamp.position); scene.add(orb);
+
+  const alleyWallLeft = box(scene, [14, 5.5, .4], [-10.5, 2.7, -11.5], material(0x241f2a), false);
+  const alleyWallRight = box(scene, [14, 5.5, .4], [10.5, 2.7, -11.5], material(0x241f2a), false);
+
+  const mural = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 2.8), new THREE.MeshBasicMaterial({ color: 0x171b22, side: THREE.DoubleSide }));
+  mural.position.set(0, 4.4, -9.6); scene.add(mural);
+  const muralText = makeNeon('SÃO LUME', 0x62e8dd); muralText.position.set(0, 4.48, -9.35); scene.add(muralText);
+
+  const sideSignA = makeNeon('KAI', 0xff5ea8); sideSignA.position.set(-8.8, 4.8, -8.2); scene.add(sideSignA);
+  const sideSignB = makeNeon('RYU', 0x70f0df); sideSignB.position.set(8.8, 4.9, -8.1); scene.add(sideSignB);
+
+  for (const x of [-6.8, 6.8]) {
+    cylinder(scene, .048, .07, 4.2, [x, 2.1, -2], material(0x4d4957), 8);
+    const lamp = new THREE.PointLight(x < 0 ? 0x62e8dd : 0xff4e91, 28, 16); lamp.position.set(x, 4.2, -2); scene.add(lamp);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(.13, 14, 8), new THREE.MeshBasicMaterial({ color: x < 0 ? 0x62e8dd : 0xff4e91 })); orb.position.copy(lamp.position); scene.add(orb);
   }
-  for (let i = 0; i < 16; i++) {
-    const x = -8 + Math.random() * 16, z = -12 + Math.random() * 20;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(.6 + Math.random() * .8, .12, .5), material(i % 2 ? 0x43333c : 0x303b42));
-    m.position.set(x, .05, z); m.rotation.y = Math.random() * Math.PI; scene.add(m);
+
+  for (let i = 0; i < 10; i++) {
+    const vending = new THREE.Group();
+    const body = box(vending, [1.1, 2.2, 1.1], [0, 1.1, 0], material(i % 2 ? 0x3a4d63 : 0x5a2f44), true);
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(.88, 1.5, .06), new THREE.MeshBasicMaterial({ color: i % 2 ? 0x69e4dc : 0xff7db6, transparent: true, opacity: .82 }));
+    glass.position.set(0, 1.3, .57); vending.add(glass);
+    vending.position.set(-11 + i * 2.3, 0, 3.4 + (i % 3) * 0.9);
+    vending.rotation.y = i % 2 ? 0.25 : -0.22;
+    scene.add(vending);
   }
+
+  for (let i = 0; i < 22; i++) {
+    const x = -12 + Math.random() * 24, z = -12 + Math.random() * 24;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(.7 + Math.random() * .8, .12, .55), material(i % 2 ? 0x3a303c : 0x2a3742));
+    m.position.set(x, .06, z); m.rotation.y = Math.random() * Math.PI; scene.add(m);
+  }
+
+  const road = new THREE.Mesh(new THREE.BoxGeometry(26, .02, 11), material(0x1a1d26));
+  road.position.set(0, 0.01, 0.8); road.receiveShadow = true; scene.add(road);
+  const curb1 = box(scene, [30, .12, .18], [0, .08, 6.1], material(0x2b303c), false);
+  const curb2 = box(scene, [30, .12, .18], [0, .08, -4.5], material(0x2b303c), false);
+  const laneMark = new THREE.Mesh(new THREE.BoxGeometry(20.5, .012, .12), new THREE.MeshBasicMaterial({ color: 0xf0d89d, transparent: true, opacity: .9 }));
+  laneMark.position.set(0, .04, 0.8); scene.add(laneMark);
 }
 function makeNeon(text, color) {
   const c = document.createElement('canvas'); c.width = 512; c.height = 120;
@@ -115,6 +153,40 @@ function makeNeon(text, color) {
   const tex = new THREE.CanvasTexture(c); const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 1.03), mat); return mesh;
 }
+function buildVenueStations() {
+  const spots = [
+    { x: -9, z: 1, color: 0xff4e91, sign: '港 · CAIS', marker: 'BAIRRO DO CAIS' },
+    { x: 19, z: -17, color: 0x62e8dd, sign: '音楽 · PÁTIO', marker: 'PÁTIO 13' },
+    { x: -19, z: 18, color: 0xf6cb74, sign: '地下 · LIVE', marker: 'GALPÃO 9' },
+    { x: 19, z: 18, color: 0xff4e91, sign: '舞台 · FINAL', marker: 'AUDITÓRIO' }
+  ];
+  spots.forEach((spot, index) => {
+    const group = new THREE.Group();
+    group.position.set(spot.x, 0, spot.z);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.45, .055, 8, 48), new THREE.MeshBasicMaterial({ color: spot.color, transparent: true, opacity: .8 }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = .08; group.add(ring);
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(.035, .12, 2.1, 8, 1, true), new THREE.MeshBasicMaterial({ color: spot.color, transparent: true, opacity: .22, side: THREE.DoubleSide }));
+    beacon.position.y = 1.15; group.add(beacon);
+    const postMat = material(index === 0 ? 0x672b43 : 0x30303d, .72, .12);
+    for (const x of [-1.6, 1.6]) {
+      box(group, [.14, 2.5, .15], [x, 1.25, -.55], postMat);
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(.37, .44, .36), new THREE.MeshBasicMaterial({ color: spot.color }));
+      lamp.position.set(x, 2.25, -.5); group.add(lamp);
+    }
+    box(group, [3.45, .14, .18], [0, 2.52, -.55], postMat);
+    const sign = makeNeon(spot.sign, spot.color); sign.scale.set(.64, .64, .64); sign.position.set(0, 2.95, -.42); group.add(sign);
+    const labelCanvas = document.createElement('canvas'); labelCanvas.width = 512; labelCanvas.height = 96;
+    const ctx = labelCanvas.getContext('2d'); ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff'; ctx.shadowColor = `#${spot.color.toString(16).padStart(6, '0')}`; ctx.shadowBlur = 18; ctx.fillText(`${String(index + 1).padStart(2, '0')}  ${spot.marker}`, 256, 48);
+    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(labelCanvas), transparent: true, depthWrite: false }));
+    label.position.set(0, 4.1, 0); label.scale.set(4.3, .8, 1); group.add(label);
+    const npc = buildFighter(0, [0x493047, 0x243b43, 0x453b2b, 0x382a43][index], spot.color, true);
+    npc.scale.setScalar(.78); npc.position.set(0, 0, 1.7); npc.rotation.y = Math.PI; group.add(npc);
+    const light = new THREE.PointLight(spot.color, 16, 8); light.position.set(0, 2.8, 0); group.add(light);
+    scene.add(group);
+    venueStations.push({ group, npc, x: spot.x, z: spot.z, color: spot.color, label: spot.marker, ring });
+  });
+}
 function buildFighter(x, clothes, accent, rival) {
   const root = new THREE.Group(); root.position.set(x, 0, rival ? -.45 : .25); root.rotation.y = rival ? -.12 : .12;
   const skin = material(rival ? 0x9b6959 : 0xb98168), outfit = material(clothes), accentMat = new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: .12 });
@@ -122,20 +194,20 @@ function buildFighter(x, clothes, accent, rival) {
   box(root, [.78, 1.05, .43], [0, 1.62, 0], outfit);
   box(root, [.82, .18, .45], [0, 1.12, 0], accentMat);
   const head = new THREE.Mesh(new THREE.SphereGeometry(.34, 16, 12), skin); head.position.set(0, 2.48, 0); head.castShadow = true; root.add(head);
-  // Hair / cap, facial detail, limbs and sneakers.
   const hair = new THREE.Mesh(new THREE.SphereGeometry(.355, 14, 8, 0, Math.PI * 2, 0, Math.PI * .48), dark); hair.position.set(0, 2.58, -.02); root.add(hair);
   box(root, [.75, .14, .48], [0, 2.79, 0], accentMat);
-  box(root, [.48, .07, .04], [0, 2.47, .31], dark, false);
+  const face = box(root, [.28, .13, .055], [0, 2.46, .318], material(0xf0c7ac, .8), false);
   const armL = cylinder(root, .12, .14, .82, [-.56, 1.67, .02], skin, 8); armL.rotation.z = -.25;
   const armR = cylinder(root, .12, .14, .82, [.56, 1.72, .03], skin, 8); armR.rotation.z = .35;
   box(root, [.32, .91, .35], [-.23, .53, 0], pants); box(root, [.32, .91, .35], [.23, .53, 0], pants);
   box(root, [.38, .2, .53], [-.23, .12, .05], dark); box(root, [.38, .2, .53], [.23, .12, .05], dark);
-  // Each challenger holds a distinct, readable instrument silhouette.
+
   const instrument = new THREE.Group(); instrument.position.set(rival ? .54 : -.5, 1.4, .45); instrument.rotation.z = rival ? -.42 : .42; root.add(instrument);
-  if (selectedStyle === 'flute' && !rival) {
+
+  if (!rival && selectedStyle === 'flute') {
     const tube = cylinder(instrument, .075, .075, 1.25, [0, 0, 0], material(0x9fe5dc, .3, .7), 12); tube.rotation.z = Math.PI / 2;
     for (let i = -2; i <= 2; i++) { const key = new THREE.Mesh(new THREE.SphereGeometry(.035, 8, 6), accentMat); key.position.set(i * .19, .07, .02); instrument.add(key); }
-  } else if (selectedStyle === 'keys' && !rival) {
+  } else if (!rival && selectedStyle === 'keys') {
     box(instrument, [.95, .3, .3], [0, 0, 0], material(0x22232c, .35));
     for (let i = 0; i < 7; i++) box(instrument, [.1, .05, .25], [-.39 + i * .13, .17, .01], material(0xecebf1, .3), false);
   } else {
@@ -143,6 +215,7 @@ function buildFighter(x, clothes, accent, rival) {
     box(instrument, [.13, 1.0, .13], [0, .53, 0], material(0x97766a, .3, .35));
     const strings = new THREE.Mesh(new THREE.BoxGeometry(.035, 1.18, .012), new THREE.MeshBasicMaterial({ color: 0xe9d9c6 })); strings.position.set(0, .2, .14); instrument.add(strings);
   }
+
   root.userData = { armL, armR, instrument, rival, accent: accentMat };
   return root;
 }
@@ -150,16 +223,96 @@ function buildFighter(x, clothes, accent, rival) {
 function resizeScene() {
   if (!renderer) return;
   camera.aspect = innerWidth / innerHeight;
-  camera.fov = innerWidth < 620 ? 47 : 42;
+  camera.fov = innerWidth < 620 ? 52 : 42;
   camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+}
+function updateExploration(dt) {
+  if (!$('garage-modal').classList.contains('hidden')) return;
+  let x = 0, z = 0;
+  if (moveKeys.has('forward')) z -= 1;
+  if (moveKeys.has('back')) z += 1;
+  if (moveKeys.has('left')) x -= 1;
+  if (moveKeys.has('right')) x += 1;
+  const moving = x !== 0 || z !== 0;
+  if (moving) {
+    const length = Math.hypot(x, z); x /= length; z /= length;
+    const speed = moveKeys.has('sprint') ? 8.2 : 5.2;
+    const nextX = clamp(playerWorldPosition.x + x * speed * dt, -25, 25);
+    const nextZ = clamp(playerWorldPosition.z + z * speed * dt, -24, 28);
+    playerWorldPosition.set(nextX, 0, nextZ);
+    playerModel.rotation.y = Math.atan2(x, z);
+    playerModel.userData.instrument.rotation.z = .42 + Math.sin(clock.elapsedTime * 10) * .06;
+  } else {
+    playerModel.userData.instrument.rotation.z = .42;
+  }
+  const yaw = playerModel.rotation.y;
+  const behindX = -Math.sin(yaw), behindZ = -Math.cos(yaw);
+  const desiredCamera = new THREE.Vector3(playerWorldPosition.x + behindX * 10, 7.5, playerWorldPosition.z + behindZ * 10);
+  camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 4));
+  const lookTarget = new THREE.Vector3(playerWorldPosition.x + Math.sin(yaw) * 5, 1.1, playerWorldPosition.z + Math.cos(yaw) * 5);
+  camera.lookAt(lookTarget);
+
+  let closest = Infinity, nearest = -1;
+  venueStations.forEach((station, index) => {
+    const distance = Math.hypot(playerWorldPosition.x - station.x, playerWorldPosition.z - station.z);
+    station.ring.material.opacity = .55 + Math.sin(clock.elapsedTime * 2.4 + index) * .22;
+    if (distance < closest) { closest = distance; nearest = index; }
+  });
+  nearestStation = closest < 3.8 ? nearest : -1;
+  const prompt = $('nearby-prompt');
+  prompt.classList.toggle('hidden', nearestStation < 0);
+  if (nearestStation >= 0) {
+    const unlocked = nearestStation <= save.unlocked;
+    $('nearby-text').textContent = unlocked ? `${String(nearestStation + 1).padStart(2, '0')} · ${venues[nearestStation].name}` : `DESAFIO ${String(nearestStation + 1).padStart(2, '0')} · BLOQUEADO`;
+    $('interact-venue').textContent = unlocked ? '[ E ] ENTRAR' : 'BLOQUEADO';
+    $('interact-venue').disabled = !unlocked;
+  }
+  const district = nearestStation >= 0 ? districtNames[nearestStation] : playerWorldPosition.z < -8 ? districtNames[1] : playerWorldPosition.x < -10 ? districtNames[2] : playerWorldPosition.x > 10 ? districtNames[3] : districtNames[0];
+  $('district-name').textContent = district;
+  $('district-copy').textContent = nearestStation >= 0 ? (nearestStation <= save.unlocked ? 'A crew espera por você. Pressione E para começar.' : 'Conquiste os desafios anteriores para liberar este palco.') : 'Explore São Lume e encontre os palcos marcados no mapa.';
+}
+function enterExploration(message = '') {
+  active = false; exploring = true;
+  $('game-screen').classList.add('exploring');
+  $('welcome-screen').classList.add('hidden');
+  $('game-screen').classList.remove('hidden');
+  $('result-modal').classList.add('hidden');
+  $('venue-label').textContent = 'CIDADE DE SÃO LUME';
+  $('venue-progress').textContent = `PRÓXIMO PALCO · ${venues[Math.min(save.unlocked, venues.length - 1)].name}`;
+  playerModel.position.set(playerWorldPosition.x, 0, playerWorldPosition.z);
+  playerModel.visible = true; rivalModel.visible = false;
+  if (message) notify(message);
+}
+function enterBattle(index) {
+  if (index > save.unlocked) { notify('ESTE PALCO AINDA ESTÁ BLOQUEADO'); return; }
+  battleReturnPosition.copy(playerWorldPosition);
+  exploring = false;
+  $('game-screen').classList.remove('exploring');
+  camera.position.set(0, 7.2, 19.5); camera.lookAt(0, 2.4, -1.5);
+  playerModel.rotation.y = .12;
+  swapPlayerModel(); showVenue(index);
+  playTone(440, .15, 'sine');
+}
+function interactWithStation() {
+  if (!exploring || nearestStation < 0) return;
+  enterBattle(nearestStation);
 }
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), .04), now = clock.elapsedTime;
+  if (exploring) updateExploration(dt);
   if (playerModel && rivalModel) {
-    playerModel.position.y = Math.sin(now * 2.5) * .035;
-    rivalModel.position.y = Math.sin(now * 2.5 + 1) * .035;
+    if (exploring) {
+      playerModel.position.x = playerWorldPosition.x;
+      playerModel.position.z = playerWorldPosition.z;
+      playerModel.position.y = Math.sin(now * 2.5) * .035;
+      playerModel.visible = true; rivalModel.visible = false;
+    } else if (active) {
+      playerModel.position.y = Math.sin(now * 2.5) * .035;
+      rivalModel.position.y = Math.sin(now * 2.5 + 1) * .035;
+      playerModel.visible = true; rivalModel.visible = true;
+    }
     playerModel.rotation.z = Math.sin(now * 1.7) * .025;
     rivalModel.rotation.z = Math.sin(now * 1.9 + 1) * .025;
     playerModel.userData.armR.rotation.z = .35 + Math.sin(now * 3.2) * .07;
@@ -235,7 +388,7 @@ function updateBars() {
 }
 function finishBattle(won) {
   if (!active) return;
-  active = false;
+  active = false; lastBattleWon = won;
   const venue = venues[currentVenue];
   if (won) {
     save.cash += venue.reward; save.level = Math.max(save.level, currentVenue + 2); save.unlocked = Math.max(save.unlocked, currentVenue + 1); persist();
@@ -244,7 +397,7 @@ function finishBattle(won) {
     $('result-title').textContent = currentVenue === venues.length - 1 ? 'O palco é seu.' : 'Seu som venceu.';
     $('result-copy').textContent = currentVenue === venues.length - 1 ? 'São Lume agora conhece seu nome. A jornada é só o começo.' : `${venue.rival} ficou sem resposta. A próxima crew já ouviu falar de você.`;
     $('reward-amount').textContent = venue.reward;
-    $('result-next').innerHTML = currentVenue === venues.length - 1 ? 'JOGAR NOVAMENTE <span>↻</span>' : 'PRÓXIMO DESAFIO <span>↗</span>';
+    $('result-next').innerHTML = 'VOLTAR À CIDADE <span>↗</span>';
   } else {
     $('result-stamp').textContent = '↺'; $('result-stamp').style.color = '#ff4e91'; $('result-stamp').style.borderColor = '#ff4e91';
     $('result-kicker').textContent = 'FIM DA RODADA'; $('result-title').textContent = 'O ritmo continua.';
@@ -301,15 +454,26 @@ function showVenue(index) {
   startedAt = performance.now(); lastBeat = -1; active = true;
 }
 function startCareer() {
-  currentVenue = save.unlocked >= venues.length ? 0 : Math.min(save.unlocked, venues.length - 1);
-  swapPlayerModel(); showVenue(currentVenue);
+  $('game-screen').classList.add('exploring');
+  enterExploration('BEM-VINDA À SÃO LUME · ENCONTRE UM PALCO');
   playTone(440, .15, 'sine');
 }
 function nextChallenge() {
   $('result-modal').classList.add('hidden');
-  if (save.unlocked >= venues.length) showVenue(0);
-  else if (currentVenue < save.unlocked) showVenue(currentVenue + 1);
-  else showVenue(currentVenue);
+  exploring = true; active = false;
+  playerWorldPosition.copy(battleReturnPosition);
+  if (lastBattleWon) {
+    currentVenue = Math.min(save.unlocked, venues.length - 1);
+    if (save.unlocked >= venues.length) {
+      playerWorldPosition.set(0, 0, 9);
+      enterExploration('VOCÊ CONQUISTOU A SELETIVA! A cidade inteira celebra seu som.');
+      return;
+    }
+    enterExploration(`VITÓRIA! NOVO PALCO LIBERADO: ${venues[currentVenue].name}`);
+  } else {
+    currentVenue = Math.min(currentVenue, save.unlocked);
+    enterExploration('RECUPERE O FÔLEGO E TENTE NOVAMENTE.');
+  }
 }
 function openGarage() {
   const wasActive = active;
@@ -350,13 +514,63 @@ for (const card of document.querySelectorAll('.style-card')) {
 }
 $('start-career').addEventListener('click', startCareer);
 $('attack-button').addEventListener('pointerdown', (event) => { event.preventDefault(); pressAttack(); });
+$('interact-venue').addEventListener('click', interactWithStation);
+$('city-garage').addEventListener('click', openGarage);
+for (const button of document.querySelectorAll('[data-move]')) {
+  const direction = button.dataset.move;
+  const press = (event) => {
+    event.preventDefault();
+    if ('pointerId' in event && event.pointerId != null) {
+      try { button.setPointerCapture?.(event.pointerId); } catch { /* some browsers reject pointer capture on touch buttons */ }
+    }
+    moveKeys.add(direction);
+  };
+  const release = (event) => {
+    if (event) event.preventDefault();
+    if ('pointerId' in event && event.pointerId != null) {
+      try { button.releasePointerCapture?.(event.pointerId); } catch { /* pointer capture may already be released */ }
+    }
+    moveKeys.delete(direction);
+  };
+  button.addEventListener('pointerdown', press);
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointerleave', release);
+  button.addEventListener('pointercancel', release);
+  button.addEventListener('lostpointercapture', () => moveKeys.delete(direction));
+  button.addEventListener('touchstart', (event) => {
+    if (event.touches && event.touches.length > 0) {
+      event.preventDefault();
+      moveKeys.add(direction);
+    }
+  }, { passive: false });
+  button.addEventListener('touchend', (event) => {
+    event.preventDefault();
+    moveKeys.delete(direction);
+  }, { passive: false });
+  button.addEventListener('touchcancel', (event) => {
+    event.preventDefault();
+    moveKeys.delete(direction);
+  }, { passive: false });
+}
 window.addEventListener('keydown', (event) => {
+  const key = event.key.toLowerCase();
+  const directions = { w: 'forward', arrowup: 'forward', s: 'back', arrowdown: 'back', a: 'left', arrowleft: 'left', d: 'right', arrowright: 'right' };
+  if (exploring && directions[key]) { event.preventDefault(); moveKeys.add(directions[key]); }
+  if (exploring && key === 'shift') moveKeys.add('sprint');
+  if (key === 'e' && exploring) { event.preventDefault(); interactWithStation(); }
   if (event.code === 'Space' && !event.repeat) { event.preventDefault(); pressAttack(); }
   if (event.key === 'Escape') {
     if (!$('garage-modal').classList.contains('hidden')) closeGarage();
-    else if (!$('result-modal').classList.contains('hidden')) $('result-modal').classList.add('hidden');
+    else if (!$('result-modal').classList.contains('hidden')) nextChallenge();
   }
 });
+window.addEventListener('keyup', (event) => {
+  const key = event.key.toLowerCase();
+  const directions = { w: 'forward', arrowup: 'forward', s: 'back', arrowdown: 'back', a: 'left', arrowleft: 'left', d: 'right', arrowright: 'right' };
+  if (directions[key]) moveKeys.delete(directions[key]);
+  if (key === 'shift') moveKeys.delete('sprint');
+});
+window.addEventListener('blur', () => moveKeys.clear());
 $('result-next').addEventListener('click', nextChallenge);
 $('open-garage').addEventListener('click', openGarage);
 $('result-garage').addEventListener('click', openGarage);
