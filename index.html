@@ -28,20 +28,20 @@
       <div class="welcome-copy">
         <p class="eyebrow"><span class="eyebrow-line"></span> UMA CIDADE. UM SONHO. MIL BATIDAS.</p>
         <h1>A batalha<br>é no <em>beat.</em></h1>
-        <p class="intro">Na cidade, respeito se conquista com ritmo. Encare as crews, evolua seu som e conquiste seu lugar no maior palco de São Lume.</p>
-        <div class="career-note"><span class="note-icon">✳</span><span><b>Sua jornada começa agora</b><small>Escolha seu instrumento. Encontre sua voz.</small></span></div>
+        <p class="intro">Na cidade, respeito se conquista com ritmo. Um bairro iluminado por neon, ruas de concreto, personagens marcantes e o eco de um Japão urbano em cada esquina. Encare as crews, evolua seu som e conquiste seu lugar no maior palco de São Lume.</p>
+        <div class="career-note"><span class="note-icon">✳</span><span><b>Sua jornada começa agora</b><small>Escolha seu instrumento. Encontre sua voz no rua de neon.</small></span></div>
       </div>
       <div class="style-picker">
         <div class="picker-heading"><div><p class="eyebrow">SEU ESTILO, SUA ARMA</p><h2>Como você joga?</h2></div><span class="step-count">01 <i>/ 02</i></span></div>
         <div class="style-grid">
           <button class="style-card selected" data-style="guitar">
-            <span class="instrument-icon guitar-icon">〽</span><span class="style-name">Guitarra</span><span class="style-tag">POTÊNCIA</span><span class="style-desc">Poucos acordes. Impacto máximo.</span><span class="style-stat"><i style="--stat:88%"></i></span>
+            <span class="instrument-icon guitar-icon">〽</span><span class="style-name">Guitarra</span><span class="style-tag">POTÊNCIA</span><span class="style-desc">Forte, direta e implacável.</span><span class="style-stat"><i style="--stat:88%"></i></span>
           </button>
           <button class="style-card" data-style="flute">
-            <span class="instrument-icon flute-icon">〰</span><span class="style-name">Flauta</span><span class="style-tag">MAGIA</span><span class="style-desc">Melodias que viram o jogo.</span><span class="style-stat"><i style="--stat:64%"></i></span>
+            <span class="instrument-icon flute-icon">〰</span><span class="style-name">Flauta</span><span class="style-tag">MAGIA</span><span class="style-desc">Notas suaves que quebram o ritmo.</span><span class="style-stat"><i style="--stat:64%"></i></span>
           </button>
           <button class="style-card" data-style="keys">
-            <span class="instrument-icon keys-icon">▥</span><span class="style-name">Teclas</span><span class="style-tag">CADÊNCIA</span><span class="style-desc">Uma chuva de notas sem parar.</span><span class="style-stat"><i style="--stat:76%"></i></span>
+            <span class="instrument-icon keys-icon">▥</span><span class="style-name">Teclas</span><span class="style-tag">CADÊNCIA</span><span class="style-desc">Pad e ataque em cascata.</span><span class="style-stat"><i style="--stat:76%"></i></span>
           </button>
         </div>
         <button id="start-career" class="primary-button">COMEÇAR JORNADA <span>↗</span></button>
@@ -51,6 +51,16 @@
     </section>
 
     <section class="game-screen hidden" id="game-screen">
+      <div class="explore-hud" id="explore-hud">
+        <div class="district-card"><span class="district-kicker">VOCÊ ESTÁ EXPLORANDO</span><b id="district-name">RUA DAS LANTERNAS</b><small id="district-copy">A cidade é sua. Encontre o próximo palco.</small></div>
+        <div class="explore-help"><kbd>W A S D</kbd> MOVER <kbd>E</kbd> INTERAGIR <span>·</span> <kbd>ESPAÇO</kbd> ATACAR NA BATALHA</div>
+        <div class="nearby-prompt hidden" id="nearby-prompt"><span class="prompt-dot"></span><span id="nearby-text">DESAFIO PRÓXIMO</span><button id="interact-venue">[ E ] ENTRAR</button></div>
+        <div class="move-pad" aria-label="Controles de movimento">
+          <button data-move="forward" aria-label="Mover para frente">▲</button>
+          <div><button data-move="left" aria-label="Mover para esquerda">◀</button><button data-move="back" aria-label="Mover para trás">▼</button><button data-move="right" aria-label="Mover para direita">▶</button></div>
+        </div>
+        <button id="city-garage" class="city-garage">♫ OFICINA <span>UPGRADES</span></button>
+      </div>
       <div class="battle-head">
         <div class="battle-title"><p class="eyebrow" id="battle-kicker">BAIRRO DO CAIS · DESAFIO 01</p><h2 id="battle-name">Ritmo de chegada</h2></div>
         <div class="round-pill"><span class="live-dot"></span><span id="battle-round">RODADA 01</span></div>
